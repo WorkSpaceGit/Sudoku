@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Судоку</title>
+
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <style>text{font-family:monospace;font-size:8.5px;dominant-baseline:middle;text-anchor:middle;fill:%23eee;}</style>
+  <text x="50%" y="22%">1|2|3</text>
+  <text x="50%" y="50%">4|5|6</text>
+  <text x="50%" y="78%">7|8|9</text>
+</svg>'>
+
+<style>
+  :root{
+    --grid-outer: 90vmin;
+    --cell-size: calc(var(--grid-outer) / 9);
+    --bg: #121212;
+    --panel: #1e1e1e;
+    --accent: #66f;
+    --muted-border: #444;
+    --strong-border: #888;
+    --text: #eee;
+    --error-bg: #A87761;
+  }
+  html,body{height:100%;margin:0;padding:0;background:var(--bg);color:var(--text);font-family:Arial, sans-serif;}
+  body{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px;box-sizing:border-box;}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+  button{background:#222;color:var(--text);border:1px solid #555;padding:8px 12px;border-radius:6px;cursor:pointer;}
+  button:hover{background:#333}
+  table#sudoku-grid{border-collapse:collapse;user-select:none;}
+  td{width:var(--cell-size);height:var(--cell-size);border:1px solid var(--muted-border);background:var(--panel);}
+  tr:nth-child(3n) td{border-bottom:3px solid var(--strong-border);}
+  td:nth-child(3n){border-right:3px solid var(--strong-border);}
+  tr:first-child td{border-top:3px solid var(--strong-border);}
+  td:first-child{border-left:3px solid var(--strong-border);}
+  td.prefilled{font-weight:700;color:#aaf;}
+  td.error input{background:var(--error-bg);color:#fff;}
+  input{width:100%;height:100%;border:0;background:transparent;color:var(--text);
+    font-size:calc(var(--cell-size)*0.55);text-align:center;font-family:monospace;outline:none;}
+  input:focus{outline:2px solid var(--accent);}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <button id="btn-easy">Простий</button>
+  <button id="btn-medium">Нормальний</button>
+  <button id="btn-hard">Складний</button>
+  <button id="btn-new">Нова гра</button>
+  <button id="btn-show-solution">Показати розв'язок</button>
+</div>
+
+<div class="grid-wrap">
+  <table id="sudoku-grid"></table>
+</div>
+
+<div id="status" style="visibility:hidden">Готово</div>
+
+<script>
+const SIZE = 9;
+let solution = null;
+let puzzle = null;
+let currentLevel = 'easy';
+let showingSolution = false;
+const dom = { table:null, cells:null, inputs:null, status:null };
+
+function debounce(fn, wait){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),wait)}}
+
+function createGrid(){
+  const table=document.getElementById('sudoku-grid');table.innerHTML='';
+  for(let r=0;r<SIZE;r++){const tr=document.createElement('tr');
+    for(let c=0;c<SIZE;c++){const td=document.createElement('td');
+      const input=document.createElement('input');
+      input.type='text';input.inputMode='numeric';input.maxLength=1;
+      input.addEventListener('input',(e)=>{if(!/^[1-9]$/.test(e.target.value))e.target.value='';debouncedCheckErrors();});
+      td.appendChild(input);tr.appendChild(td);}
+    table.appendChild(tr);}
+  dom.table=table;dom.cells=Array.from(table.querySelectorAll('td'));dom.inputs=Array.from(table.querySelectorAll('input'));
+  dom.status=document.getElementById('status');
+}
+
+function getBoardState(){const b=Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+  dom.inputs.forEach((inp,i)=>{const v=parseInt(inp.value)||0;b[Math.floor(i/SIZE)][i%SIZE]=v;});return b;}
+
+function checkErrors(){
+  const b=getBoardState();const e=new Set();
+  for(let r=0;r<SIZE;r++){const s=new Map();for(let c=0;c<SIZE;c++){const v=b[r][c];if(!v)continue;if(s.has(v)){e.add(`${r},${c}`);e.add(`${r},${s.get(v)}`);}else s.set(v,c);}}
+  for(let c=0;c<SIZE;c++){const s=new Map();for(let r=0;r<SIZE;r++){const v=b[r][c];if(!v)continue;if(s.has(v)){e.add(`${r},${c}`);e.add(`${s.get(v)},${c}`);}else s.set(v,r);}}
+  for(let br=0;br<3;br++)for(let bc=0;bc<3;bc++){const s=new Map();
+    for(let i=0;i<3;i++)for(let j=0;j<3;j++){const r=br*3+i,c=bc*3+j,v=b[r][c];if(!v)continue;if(s.has(v)){e.add(`${r},${c}`);const [rr,cc]=s.get(v);e.add(`${rr},${cc}`);}else s.set(v,[r,c]);}}
+  dom.cells.forEach((cell,idx)=>{const r=Math.floor(idx/SIZE),c=idx%SIZE;cell.classList.toggle('error',e.has(`${r},${c}`));});
+}
+const debouncedCheckErrors=debounce(checkErrors,100);
+
+function isSafe(b,r,c,n){for(let i=0;i<SIZE;i++){if(b[r][i]===n||b[i][c]===n)return false;}
+  const br=Math.floor(r/3)*3,bc=Math.floor(c/3)*3;
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++)if(b[br+i][bc+j]===n)return false;return true;}
+
+function generateFullSolution(){
+  const b=Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+  function nums(){const a=[1,2,3,4,5,6,7,8,9];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+  function back(p=0){if(p===SIZE*SIZE)return true;const r=Math.floor(p/SIZE),c=p%SIZE;if(b[r][c])return back(p+1);
+    for(const n of nums()){if(isSafe(b,r,c,n)){b[r][c]=n;if(back(p+1))return true;b[r][c]=0;}}return false;}
+  back();return b;
+}
+
+function countSolutions(board, limit=2){
+  let solutions=0;
+  function findEmpty(b){for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(b[r][c]===0)return [r,c];return null;}
+  function back(b){
+    if(solutions>=limit)return;
+    const pos=findEmpty(b);if(!pos){solutions++;return;}
+    const [r,c]=pos;
+    for(let n=1;n<=9;n++){if(isSafe(b,r,c,n)){b[r][c]=n;back(b);b[r][c]=0;if(solutions>=limit)return;}}}
+  const copy=board.map(r=>r.slice());back(copy);return solutions;
+}
+
+// --- 💡 Нова логіка рівнів ---
+function getOpenCount(level){
+  const total = SIZE * SIZE;
+  if(level==='easy') return Math.round(total * 0.7);   // 70%
+  if(level==='medium') return Math.round(total * 0.5); // 50%
+  if(level==='hard') return Math.round(total * 0.3);   // 30%
+  return Math.round(total * 0.5);
+}
+
+// --- 💡 Генерація головоломки ---
+function makePuzzleFromSolution(fullSolution, openCount, ensureRowCol=false){
+  const puzzle = fullSolution.map(r => r.slice());
+  const allCells = [];
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)allCells.push([r,c]);
+  allCells.sort(()=>Math.random()-0.5);
+  let removed = 0;
+  const maxRemovals = SIZE*SIZE - openCount;
+  for(const [r,c] of allCells){
+    if(removed>=maxRemovals)break;
+    const backup=puzzle[r][c];puzzle[r][c]=0;
+    if(countSolutions(puzzle,2)===1){removed++;}else puzzle[r][c]=backup;
+  }
+
+  // 🔹 Гарантуємо: у Easy немає повністю порожніх рядків чи стовпчиків
+  if(ensureRowCol){
+    for(let i=0;i<SIZE;i++){
+      if(puzzle[i].every(v=>v===0)){const c=Math.floor(Math.random()*SIZE);puzzle[i][c]=fullSolution[i][c];}
+      const colEmpty = puzzle.every(r=>r[i]===0);
+      if(colEmpty){const r=Math.floor(Math.random()*SIZE);puzzle[r][i]=fullSolution[r][i];}
+    }
+  }
+  return puzzle;
+}
+
+function displayPuzzle(p){for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){const i=r*SIZE+c,cell=dom.cells[i],inp=dom.inputs[i],v=p[r][c];
+  if(v!==0){inp.value=v;inp.disabled=true;cell.classList.add('prefilled');cell.classList.remove('error');}
+  else{inp.value='';inp.disabled=false;cell.classList.remove('prefilled','error');}}
+  debouncedCheckErrors();
+}
+
+async function startGame(level){
+  currentLevel=level||currentLevel;dom.status.textContent='Генерація...';
+  await new Promise(r=>setTimeout(r,10));
+  const full=generateFullSolution();
+  const open=getOpenCount(currentLevel);
+  const ensureRowCol = (currentLevel==='easy');
+  const newPuzzle=makePuzzleFromSolution(full,open,ensureRowCol);
+  solution=full;puzzle=newPuzzle;displayPuzzle(puzzle);
+  showingSolution=false;
+  document.getElementById('btn-show-solution').textContent='Показати розв’язок';
+  dom.status.textContent='Готово';
+}
+
+function toggleSolution(){
+  if(!solution||!puzzle)return alert('Спочатку створіть головоломку!');
+  if(!showingSolution){
+    dom.inputs.forEach((inp,i)=>{const r=Math.floor(i/SIZE),c=i%SIZE;inp.value=solution[r][c];inp.disabled=true;dom.cells[i].classList.add('prefilled');});
+    showingSolution=true;
+    document.getElementById('btn-show-solution').textContent='Сховати розв’язок';
+  } else {
+    displayPuzzle(puzzle);showingSolution=false;
+    document.getElementById('btn-show-solution').textContent='Показати розв’язок';
+  }
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  createGrid();
+  document.getElementById('btn-easy').onclick=()=>startGame('easy');
+  document.getElementById('btn-medium').onclick=()=>startGame('medium');
+  document.getElementById('btn-hard').onclick=()=>startGame('hard');
+  document.getElementById('btn-new').onclick=()=>startGame(currentLevel);
+  document.getElementById('btn-show-solution').onclick=toggleSolution;
+  startGame('easy');
+});
+</script>
+</body>
+</html>
