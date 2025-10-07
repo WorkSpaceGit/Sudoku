@@ -3,17 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Судоку</title>
-
-<link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <style>text{font-family:monospace;font-size:8.5px;dominant-baseline:middle;text-anchor:middle;fill:%23eee;}</style>
-  <text x="50%" y="22%">1|2|3</text>
-  <text x="50%" y="50%">4|5|6</text>
-  <text x="50%" y="78%">7|8|9</text>
-</svg>'>
+<title>Судоку (виправлена мобільна версія)</title>
 
 <style>
+/* Щоб розміри працювали передбачувано */
+*, *::before, *::after { box-sizing: border-box; }
+
 :root {
   --grid-outer: 90vmin;
   --cell-size: calc(var(--grid-outer) / 9);
@@ -39,8 +34,9 @@ body {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  box-sizing: border-box;
 }
+
+/* Кнопки керування */
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -56,22 +52,33 @@ button {
   cursor: pointer;
 }
 button:hover { background: #333; }
+
+/* Контейнер сітки — центруємо дочірні елементи */
 .grid-container {
   display: flex;
   flex-direction: column;
   gap: 10px;
   width: 100%;
   max-width: var(--grid-outer);
+  align-items: center; /* <-- ключова зміна */
   flex-grow: 1;
 }
+
+/* Обгортка сітки: задаємо явну ширину, що відповідає 9 клітинкам */
 .grid-wrap {
   display: flex;
   justify-content: center;
   align-items: center;
+  width: calc(var(--cell-size) * 9);
+  max-width: 100%;
 }
+
+/* Таблиця: також фіксована ширина, щоб точно співпадати з панеллю чисел */
 table#sudoku-grid {
   border-collapse: collapse;
   user-select: none;
+  width: calc(var(--cell-size) * 9); /* явна ширина */
+  max-width: 100%;
 }
 td {
   width: var(--cell-size);
@@ -85,6 +92,7 @@ tr:first-child td { border-top: 3px solid var(--strong-border); }
 td:first-child { border-left: 3px solid var(--strong-border); }
 td.prefilled { font-weight: 700; color: #aaf; }
 td.error input { background: var(--error-bg); color: #fff; }
+
 input {
   width: 100%;
   height: 100%;
@@ -97,17 +105,24 @@ input {
   outline: none;
 }
 input:focus { outline: none; }
+
+/* Панель чисел */
 .number-panel {
   display: flex;
   justify-content: center;
   padding: 4px;
-}
-.numbers-row {
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 6px;
   width: 100%;
 }
+
+/* Головна зміна: ширина рядка цифр тепер точно така ж, як сітка */
+.numbers-row {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr); /* 9 цифр + ластик */
+  gap: 6px;
+  width: calc(var(--cell-size) * 9); /* вирівнювання з таблицею */
+  max-width: 100%;
+}
+
 .number-panel button {
   aspect-ratio: 1/1;
   border: none;
@@ -124,8 +139,13 @@ input:focus { outline: none; }
   background: var(--accent);
   color: white;
 }
-@media (max-width: 600px) {
-  :root { --grid-outer: 95vmin; }
+
+/* Невеликі підлаштування для дуже вузьких екранів */
+@media (max-width: 420px) {
+  :root { --grid-outer: 95vmin; } /* злегка більше для вузьких екранів */
+  .numbers-row { gap: 4px; }
+  .number-panel button { font-size: calc(var(--cell-size)*0.38); }
+  input { font-size: calc(var(--cell-size)*0.5); }
 }
 </style>
 </head>
@@ -143,6 +163,7 @@ input:focus { outline: none; }
   <div class="grid-wrap">
     <table id="sudoku-grid"></table>
   </div>
+
   <div class="number-panel">
     <div class="numbers-row">
       <button data-num="1">1</button>
@@ -162,9 +183,9 @@ input:focus { outline: none; }
 <div id="status" style="visibility:hidden">Готово</div>
 
 <script>
-/* =============================
-   Клас SudokuGame
-============================= */
+/* Твій JS залишився без змін — він працює з DOM як раніше.
+   Я просто переніс/скопіював оптимізовану версію JS з попереднього файлу. */
+
 class SudokuGame {
   constructor() {
     this.SIZE = 9;
@@ -291,66 +312,47 @@ class SudokuGame {
   }
 }
 
-/* =============================
-   Клас SudokuValidator
-============================= */
+/* Validator / Generator / NumberPanel (без змін по логіці) */
 class SudokuValidator {
-  constructor(game) {
-    this.game = game;
-  }
-
+  constructor(game) { this.game = game; }
   checkErrors() {
     const SIZE = this.game.SIZE;
     const b = this.getBoardState();
     const e = new Set();
-
     for (let r = 0; r < SIZE; r++) {
       const s = new Map();
       for (let c = 0; c < SIZE; c++) {
         const v = b[r][c];
         if (!v) continue;
-        if (s.has(v)) {
-          e.add(`${r},${c}`);
-          e.add(`${r},${s.get(v)}`);
-        } else s.set(v, c);
+        if (s.has(v)) { e.add(`${r},${c}`); e.add(`${r},${s.get(v)}`); }
+        else s.set(v, c);
       }
     }
-
     for (let c = 0; c < SIZE; c++) {
       const s = new Map();
       for (let r = 0; r < SIZE; r++) {
         const v = b[r][c];
         if (!v) continue;
-        if (s.has(v)) {
-          e.add(`${r},${c}`);
-          e.add(`${s.get(v)},${c}`);
-        } else s.set(v, r);
+        if (s.has(v)) { e.add(`${r},${c}`); e.add(`${s.get(v)},${c}`); }
+        else s.set(v, r);
       }
     }
-
     for (let br = 0; br < 3; br++) {
       for (let bc = 0; bc < 3; bc++) {
         const s = new Map();
-        for (let i = 0; i < 3; i++) {
-          for (let j = 0; j < 3; j++) {
-            const r = br * 3 + i, c = bc * 3 + j, v = b[r][c];
-            if (!v) continue;
-            if (s.has(v)) {
-              e.add(`${r},${c}`);
-              const [rr, cc] = s.get(v);
-              e.add(`${rr},${cc}`);
-            } else s.set(v, [r, c]);
-          }
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+          const r = br*3+i, c = bc*3+j, v = b[r][c];
+          if (!v) continue;
+          if (s.has(v)) { e.add(`${r},${c}`); const [rr,cc] = s.get(v); e.add(`${rr},${cc}`); }
+          else s.set(v, [r,c]);
         }
       }
     }
-
     this.game.dom.cells.forEach((cell, idx) => {
       const r = Math.floor(idx / SIZE), c = idx % SIZE;
       cell.classList.toggle('error', e.has(`${r},${c}`));
     });
   }
-
   getBoardState() {
     const SIZE = this.game.SIZE;
     const b = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
@@ -362,25 +364,16 @@ class SudokuValidator {
   }
 }
 
-/* =============================
-   Клас PuzzleGenerator
-============================= */
 class PuzzleGenerator {
-  constructor(game) {
-    this.game = game;
-  }
-
+  constructor(game) { this.game = game; }
   generateFullSolution() {
     const SIZE = this.game.SIZE;
     const b = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
     const nums = () => [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
     const isSafe = (b, r, c, n) => {
-      for (let i = 0; i < SIZE; i++)
-        if (b[r][i] === n || b[i][c] === n) return false;
+      for (let i=0;i<SIZE;i++) if (b[r][i]===n || b[i][c]===n) return false;
       const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
-      for (let i = 0; i < 3; i++)
-        for (let j = 0; j < 3; j++)
-          if (b[br+i][bc+j] === n) return false;
+      for (let i=0;i<3;i++) for (let j=0;j<3;j++) if (b[br+i][bc+j]===n) return false;
       return true;
     };
     const back = (p=0) => {
@@ -395,7 +388,8 @@ class PuzzleGenerator {
       }
       return false;
     };
-    back(); return b;
+    back();
+    return b;
   }
 
   countSolutions(board, limit=2) {
@@ -404,17 +398,17 @@ class PuzzleGenerator {
     const isSafe = (b,r,c,n) => {
       for (let i=0;i<SIZE;i++) if(b[r][i]===n||b[i][c]===n) return false;
       const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
-      for (let i=0;i<3;i++) for (let j=0;j<3;j++)
-        if (b[br+i][bc+j]===n) return false;
+      for (let i=0;i<3;i++) for (let j=0;j<3;j++) if (b[br+i][bc+j]===n) return false;
       return true;
     };
-    function findEmpty(b){for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(b[r][c]===0)return [r,c];return null;}
-    function back(b){
-      if(solutions>=limit)return;
-      const pos=findEmpty(b);if(!pos){solutions++;return;}
-      const [r,c]=pos;
-      for(let n=1;n<=9;n++){if(isSafe(b,r,c,n)){b[r][c]=n;back(b);b[r][c]=0;if(solutions>=limit)return;}}}
-    const copy=board.map(r=>r.slice());back(copy);return solutions;
+    function findEmpty(b){ for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (b[r][c]===0) return [r,c]; return null; }
+    function back(b) {
+      if (solutions>=limit) return;
+      const pos = findEmpty(b); if (!pos) { solutions++; return; }
+      const [r,c] = pos;
+      for (let n=1;n<=9;n++) { if (isSafe(b,r,c,n)) { b[r][c]=n; back(b); b[r][c]=0; if (solutions>=limit) return; } }
+    }
+    const copy = board.map(r=>r.slice()); back(copy); return solutions;
   }
 
   getOpenCount(level) {
@@ -435,19 +429,17 @@ class PuzzleGenerator {
     const maxRemovals = SIZE*SIZE - openCount;
     for (const [r,c] of allCells) {
       if (removed>=maxRemovals) break;
-      const backup=puzzle[r][c];puzzle[r][c]=0;
-      if(this.countSolutions(puzzle,2)===1){removed++;} else puzzle[r][c]=backup;
+      const backup = puzzle[r][c]; puzzle[r][c] = 0;
+      if (this.countSolutions(puzzle,2) === 1) { removed++; } else puzzle[r][c] = backup;
     }
     if (ensureRowCol) {
       for (let i=0;i<SIZE;i++) {
         if (puzzle[i].every(v=>v===0)) {
-          const c=Math.floor(Math.random()*SIZE);
-          puzzle[i][c]=full[i][c];
+          const c = Math.floor(Math.random()*SIZE); puzzle[i][c] = full[i][c];
         }
-        const colEmpty=puzzle.every(r=>r[i]===0);
-        if(colEmpty){
-          const r=Math.floor(Math.random()*SIZE);
-          puzzle[r][i]=full[r][i];
+        const colEmpty = puzzle.every(r=>r[i]===0);
+        if (colEmpty) {
+          const r = Math.floor(Math.random()*SIZE); puzzle[r][i] = full[r][i];
         }
       }
     }
@@ -455,9 +447,6 @@ class PuzzleGenerator {
   }
 }
 
-/* =============================
-   Клас NumberPanel
-============================= */
 class NumberPanel {
   constructor(game) {
     this.game = game;
@@ -489,9 +478,7 @@ class NumberPanel {
   }
 }
 
-/* =============================
-   Запуск гри
-============================= */
+/* Запуск гри */
 document.addEventListener('DOMContentLoaded', () => {
   new SudokuGame();
 });
