@@ -4,492 +4,551 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Судоку</title>
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><style>text{font-family:monospace;font-size:8.5px;dominant-baseline:middle;text-anchor:middle;fill:%23eee;}</style><text x="50%" y="22%">1|2|3</text><text x="50%" y="50%">4|5|6</text><text x="50%" y="78%">7|8|9</text></svg>'>
 
-<link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <style>text{font-family:monospace;font-size:8.5px;dominant-baseline:middle;text-anchor:middle;fill:%23eee;}</style>
-  <text x="50%" y="22%">1|2|3</text>
-  <text x="50%" y="50%">4|5|6</text>
-  <text x="50%" y="78%">7|8|9</text>
-</svg>'>
-  
 <style>
-/* Щоб розміри працювали передбачувано */
 *, *::before, *::after { box-sizing: border-box; }
 
 :root {
-  --grid-outer: 90vmin;
-  --cell-size: calc(var(--grid-outer) / 9);
-  --bg: #121212;
-  --panel: #1e1e1e;
-  --accent: #66f;
-  --muted-border: #444;
-  --strong-border: #888;
-  --text: #eee;
-  --error-bg: #A87761;
+  --bg:            #111;
+  --panel:         #1a1a1a;
+  --accent:        #66f;
+  --win:           #f80;
+  --muted-border:  #333;
+  --strong-border: #666;
+  --text:          #ddd;
+  --text-dim:      #555;
+  --error-bg:      #6b3a2a;
+  --prefilled:     #8899ff;
+  --btn-bg:        #1a1a1a;
+  --btn-border:    #333;
+  --btn-hover:     #222;
 }
-html, body {
+
+html {
   height: 100%;
+}
+
+body {
+  height: 100dvh;
   margin: 0;
-  padding: 0;
+  padding: 8px;
   background: var(--bg);
   color: var(--text);
-  font-family: Arial, sans-serif;
-}
-body {
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 6px;
+  /* НЕ justify-content: center — нехай flex сам розподіляє */
 }
 
-/* Кнопки керування */
+/* ── Кнопки режиму ────────────────────────────────────── */
 .controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: wrap;          /* переносимо на 2 рядки якщо треба */
+  gap: 5px;
   justify-content: center;
-}
-button {
-  background: #222;
-  color: var(--text);
-  border: 1px solid #555;
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-button:hover { background: #333; }
-
-/* Контейнер сітки — центруємо дочірні елементи */
-.grid-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex: 0 0 auto;           /* фіксована висота, не розтягується */
   width: 100%;
-  max-width: var(--grid-outer);
-  align-items: center; /* <-- ключова зміна */
-  flex-grow: 1;
 }
 
-/* Обгортка сітки: задаємо явну ширину, що відповідає 9 клітинкам */
+button {
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  border: 1px solid var(--btn-border);
+  padding: 5px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  transition: color 0.15s, border-color 0.15s;
+}
+button:hover {
+  color: var(--text);
+  border-color: #555;
+}
+button.active-level {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* ── Сітка ────────────────────────────────────────────── */
 .grid-wrap {
+  flex: 1 1 0;       /* займає весь залишок висоти */
+  min-height: 0;     /* дозволяє flex-item стискатись нижче content-size */
   display: flex;
-  justify-content: center;
   align-items: center;
-  width: calc(var(--cell-size) * 9);
-  max-width: 100%;
+  justify-content: center;
+  width: 100%;
+  container-type: size; /* вмикає cqw/cqh відносно цього контейнера */
 }
 
-/* Таблиця: також фіксована ширина, щоб точно співпадати з панеллю чисел */
 table#sudoku-grid {
   border-collapse: collapse;
   user-select: none;
-  width: calc(var(--cell-size) * 9); /* явна ширина */
-  max-width: 100%;
+  /* розмір = менше з: вся ширина або вся доступна висота grid-wrap */
+  width:  min(100%, 100cqh);
+  height: min(100%, 100cqw);
+  aspect-ratio: 1 / 1;
+  /* fallback для браузерів без cqh */
+  max-width:  min(90vw, 80vh);
+  max-height: min(90vw, 80vh);
+  table-layout: fixed;
 }
+
 td {
-  width: var(--cell-size);
-  height: var(--cell-size);
   border: 1px solid var(--muted-border);
   background: var(--panel);
 }
-tr:nth-child(3n) td { border-bottom: 3px solid var(--strong-border); }
-td:nth-child(3n) { border-right: 3px solid var(--strong-border); }
-tr:first-child td { border-top: 3px solid var(--strong-border); }
-td:first-child { border-left: 3px solid var(--strong-border); }
-td.prefilled { font-weight: 700; color: #aaf; }
-td.error input { background: var(--error-bg); color: #fff; }
+
+/* Жирні межі блоків */
+tr:nth-child(3n) td    { border-bottom: 2px solid var(--strong-border); }
+td:nth-child(3n)       { border-right:  2px solid var(--strong-border); }
+tr:first-child td      { border-top:    2px solid var(--strong-border); }
+td:first-child         { border-left:   2px solid var(--strong-border); }
+
+td.prefilled input { color: var(--prefilled); font-weight: 700; }
+td.error   input { background: var(--error-bg); }
+
+/* Win-стан: цифри стають помаранчевими */
+body.won td.prefilled input { color: var(--win); }
+body.won td:not(.prefilled) input { color: var(--win); }
 
 input {
   width: 100%;
   height: 100%;
+  display: block;
   border: 0;
   background: transparent;
   color: var(--text);
-  font-size: calc(var(--cell-size)*0.55);
+  font-size: 4cqw; /* container-relative — оновлюється через ResizeObserver у JS */
   text-align: center;
-  font-family: monospace;
+  font-family: inherit;
   outline: none;
+  cursor: default;
 }
-input:focus { outline: none; }
 
-/* Панель чисел */
+/* ── Панель цифр ──────────────────────────────────────── */
 .number-panel {
-  display: flex;
-  justify-content: center;
-  padding: 4px;
+  flex: 0 0 auto;
   width: 100%;
+  max-width: min(90vw, 80vh); /* рівна ширина зі сіткою */
 }
 
-/* Головна зміна: ширина рядка цифр тепер точно така ж, як сітка */
 .numbers-row {
   display: grid;
-  grid-template-columns: repeat(10, 1fr); /* 9 цифр + ластик */
-  gap: 6px;
-  width: calc(var(--cell-size) * 9); /* вирівнювання з таблицею */
-  max-width: 100%;
-}
-
-.number-panel button {
-  aspect-ratio: 1/1;
-  border: none;
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: calc(var(--cell-size)*0.45);
-  cursor: pointer;
-  transition: background 0.2s;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
   width: 100%;
 }
-.number-panel button:hover { background: rgba(102,102,255,0.2); }
-.number-panel button.active {
+
+.numbers-row button {
+  aspect-ratio: 1/1;
+  border-radius: 4px;
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  border: 1px solid var(--btn-border);
+  font-size: clamp(9px, 3vmin, 22px);
+  cursor: pointer;
+  width: 100%;
+  padding: 0;
+  font-family: inherit;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.numbers-row button:hover { color: var(--text); border-color: #555; }
+.numbers-row button.active {
   background: var(--accent);
-  color: white;
+  color: #fff;
+  border-color: var(--accent);
 }
 
-/* Невеликі підлаштування для дуже вузьких екранів */
-@media (max-width: 420px) {
-  :root { --grid-outer: 95vmin; } /* злегка більше для вузьких екранів */
-  .numbers-row { gap: 4px; }
-  .number-panel button { font-size: calc(var(--cell-size)*0.38); }
-  input { font-size: calc(var(--cell-size)*0.5); }
+/* ── Модальне вікно ───────────────────────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--strong-border);
+  border-radius: 6px;
+  padding: 24px 28px;
+  max-width: 300px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.modal p { margin: 0 0 18px; }
+.modal-buttons { display: flex; gap: 8px; justify-content: center; }
+.modal-buttons button { font-size: 12px; padding: 6px 18px; }
+.modal-buttons .btn-confirm {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ── Win-банер ────────────────────────────────────────── */
+.win-banner {
+  flex: 0 0 auto;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--win);
+  visibility: hidden; /* займає місце завжди → layout не стрибає */
+}
+body.won .win-banner { visibility: visible; }
+
+@media (max-width: 380px) {
+  button { padding: 4px 10px; font-size: 11px; }
 }
 </style>
 </head>
 <body>
 
 <div class="controls">
-  <button id="btn-easy">Простий</button>
-  <button id="btn-medium">Нормальний</button>
-  <button id="btn-hard">Складний</button>
-  <button id="btn-new">Нова гра</button>
-  <button id="btn-show-solution">Показати розв’язок</button>
+  <button id="btn-easy">ПРОСТИЙ</button>
+  <button id="btn-medium">НОРМАЛЬНИЙ</button>
+  <button id="btn-hard">СКЛАДНИЙ</button>
+  <button id="btn-show-solution">РОЗВ'ЯЗОК</button>
 </div>
 
-<div class="grid-container">
-  <div class="grid-wrap">
-    <table id="sudoku-grid"></table>
-  </div>
+<div class="grid-wrap">
+  <table id="sudoku-grid"></table>
+</div>
 
-  <div class="number-panel">
-    <div class="numbers-row">
-      <button data-num="1">1</button>
-      <button data-num="2">2</button>
-      <button data-num="3">3</button>
-      <button data-num="4">4</button>
-      <button data-num="5">5</button>
-      <button data-num="6">6</button>
-      <button data-num="7">7</button>
-      <button data-num="8">8</button>
-      <button data-num="9">9</button>
-      <button data-num="del">⌫</button>
+<div class="number-panel">
+  <div class="numbers-row">
+    <button data-num="1">1</button>
+    <button data-num="2">2</button>
+    <button data-num="3">3</button>
+    <button data-num="4">4</button>
+    <button data-num="5">5</button>
+    <button data-num="6">6</button>
+    <button data-num="7">7</button>
+    <button data-num="8">8</button>
+    <button data-num="9">9</button>
+    <button data-num="del">⌫</button>
+  </div>
+</div>
+
+<div class="win-banner">✦ вирішено ✦</div>
+
+<!-- Модальне підтвердження -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <p>Гра ще не завершена.<br>Розпочати нову?</p>
+    <div class="modal-buttons">
+      <button id="modal-cancel">Скасувати</button>
+      <button id="modal-confirm" class="btn-confirm">Так</button>
     </div>
   </div>
 </div>
 
-<div id="status" style="visibility:hidden">Готово</div>
-
 <script>
-/* Твій JS залишився без змін — він працює з DOM як раніше.
-   Я просто переніс/скопіював оптимізовану версію JS з попереднього файлу. */
-
-class SudokuGame {
-  constructor() {
-    this.SIZE = 9;
-    this.grid = Array.from({ length: this.SIZE }, () => Array(this.SIZE).fill(0));
-    this.solution = null;
-    this.puzzle = null;
-    this.currentLevel = 'easy';
-    this.showingSolution = false;
-    this.activeInput = null;
-    this.selectedNumber = null;
-    this.initializeDOM();
-    this.attachEvents();
-    this.validator = new SudokuValidator(this);
-    this.generator = new PuzzleGenerator(this);
-    this.numberPanel = new NumberPanel(this);
-    this.startGame('easy');
-  }
-
-  initializeDOM() {
-    this.dom = {
-      table: document.getElementById('sudoku-grid'),
-      cells: [],
-      inputs: [],
-      status: document.getElementById('status'),
-      numberButtons: []
-    };
-    this.createGrid();
-  }
-
-  createGrid() {
-    const table = this.dom.table;
-    table.innerHTML = '';
-    for (let r = 0; r < this.SIZE; r++) {
-      const tr = document.createElement('tr');
-      for (let c = 0; c < this.SIZE; c++) {
-        const td = document.createElement('td');
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.inputMode = 'none';
-        input.maxLength = 1;
-        td.appendChild(input);
-        tr.appendChild(td);
-      }
-      table.appendChild(tr);
+/* ── Web Worker (Blob) ───────────────────────────────────── */
+const WORKER_CODE = `
+function buildMasks(board) {
+  const rows = new Int16Array(9), cols = new Int16Array(9), boxes = new Int16Array(9);
+  for (let r = 0; r < 9; r++)
+    for (let c = 0; c < 9; c++) {
+      const v = board[r][c];
+      if (v) { const bit = 1<<v; rows[r]|=bit; cols[c]|=bit; boxes[((r/3)|0)*3+((c/3)|0)]|=bit; }
     }
-    this.dom.cells = Array.from(table.querySelectorAll('td'));
-    this.dom.inputs = Array.from(table.querySelectorAll('input'));
-  }
+  return { rows, cols, boxes };
+}
 
-  attachEvents() {
-    document.getElementById('btn-easy').onclick = () => this.startGame('easy');
-    document.getElementById('btn-medium').onclick = () => this.startGame('medium');
-    document.getElementById('btn-hard').onclick = () => this.startGame('hard');
-    document.getElementById('btn-new').onclick = () => this.startGame(this.currentLevel);
-    document.getElementById('btn-show-solution').onclick = () => this.toggleSolution();
-    this.dom.inputs.forEach(inp => {
-      inp.addEventListener('click', () => {
-        if (this.showingSolution || inp.disabled) return;
-        if (this.selectedNumber === 'del') {
-          inp.value = '';
-          this.validator.checkErrors();
-          return;
-        }
-        if (this.selectedNumber) {
-          inp.value = this.selectedNumber;
-          this.validator.checkErrors();
-        }
-      });
-      inp.addEventListener('focus', e => e.target.blur());
-    });
+function generateFullSolution() {
+  const board = Array.from({length:9}, () => new Int8Array(9));
+  const rows = new Int16Array(9), cols = new Int16Array(9), boxes = new Int16Array(9);
+  function shuffle() {
+    const a=[1,2,3,4,5,6,7,8,9];
+    for (let i=8;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; }
+    return a;
   }
-
-  async startGame(level) {
-    this.currentLevel = level;
-    this.dom.status.textContent = 'Генерація...';
-    await new Promise(r => setTimeout(r, 10));
-    const full = this.generator.generateFullSolution();
-    const open = this.generator.getOpenCount(level);
-    const ensureRowCol = level === 'easy';
-    const puzzle = this.generator.makePuzzleFromSolution(full, open, ensureRowCol);
-    this.solution = full;
-    this.puzzle = puzzle;
-    this.displayPuzzle(puzzle);
-    this.showingSolution = false;
-    document.getElementById('btn-show-solution').textContent = 'Показати розв’язок';
-    this.dom.status.textContent = 'Готово';
-  }
-
-  displayPuzzle(puzzle) {
-    this.dom.inputs.forEach((inp, i) => {
-      const r = Math.floor(i / this.SIZE);
-      const c = i % this.SIZE;
-      const v = puzzle[r][c];
-      const cell = this.dom.cells[i];
-      if (v !== 0) {
-        inp.value = v;
-        inp.disabled = true;
-        cell.classList.add('prefilled');
-      } else {
-        inp.value = '';
-        inp.disabled = false;
-        cell.classList.remove('prefilled');
-      }
-    });
-    this.validator.checkErrors();
-  }
-
-  toggleSolution() {
-    if (!this.solution || !this.puzzle) return alert('Спочатку створіть головоломку!');
-    if (!this.showingSolution) {
-      this.dom.inputs.forEach((inp, i) => {
-        const r = Math.floor(i / this.SIZE);
-        const c = i % this.SIZE;
-        inp.value = this.solution[r][c];
-        inp.disabled = true;
-      });
-      this.showingSolution = true;
-      document.getElementById('btn-show-solution').textContent = 'Сховати розв’язок';
-    } else {
-      this.displayPuzzle(this.puzzle);
-      this.showingSolution = false;
-      document.getElementById('btn-show-solution').textContent = 'Показати розв’язок';
+  function back(pos) {
+    if (pos===81) return true;
+    const r=(pos/9)|0, c=pos%9, b=((r/3)|0)*3+((c/3)|0);
+    const used=rows[r]|cols[c]|boxes[b];
+    for (const n of shuffle()) {
+      const bit=1<<n;
+      if (used&bit) continue;
+      board[r][c]=n; rows[r]|=bit; cols[c]|=bit; boxes[b]|=bit;
+      if (back(pos+1)) return true;
+      board[r][c]=0; rows[r]^=bit; cols[c]^=bit; boxes[b]^=bit;
     }
+    return false;
+  }
+  back(0);
+  return Array.from(board, r => Array.from(r));
+}
+
+function countSolutions(board, limit=2) {
+  const {rows,cols,boxes} = buildMasks(board);
+  let count=0;
+  function back(pos) {
+    if (count>=limit) return;
+    while (pos<81 && board[(pos/9)|0][pos%9]!==0) pos++;
+    if (pos===81) { count++; return; }
+    const r=(pos/9)|0, c=pos%9, b=((r/3)|0)*3+((c/3)|0);
+    const used=rows[r]|cols[c]|boxes[b];
+    for (let n=1;n<=9;n++) {
+      const bit=1<<n;
+      if (used&bit) continue;
+      board[r][c]=n; rows[r]|=bit; cols[c]|=bit; boxes[b]|=bit;
+      back(pos+1);
+      board[r][c]=0; rows[r]^=bit; cols[c]^=bit; boxes[b]^=bit;
+      if (count>=limit) return;
+    }
+  }
+  back(0); return count;
+}
+
+function makePuzzle(full, openCount, ensureRowCol) {
+  const puzzle = full.map(r=>r.slice());
+  const cells = [];
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) cells.push(r*9+c);
+  for (let i=cells.length-1;i>0;i--) { const j=(Math.random()*(i+1))|0; [cells[i],cells[j]]=[cells[j],cells[i]]; }
+  let removed=0;
+  const maxRemovals=81-openCount;
+  for (const idx of cells) {
+    if (removed>=maxRemovals) break;
+    const r=(idx/9)|0, c=idx%9, backup=puzzle[r][c];
+    puzzle[r][c]=0;
+    if (countSolutions(puzzle,2)===1) removed++;
+    else puzzle[r][c]=backup;
+  }
+  if (ensureRowCol) {
+    for (let i=0;i<9;i++) {
+      if (puzzle[i].every(v=>v===0)) { const c=(Math.random()*9)|0; puzzle[i][c]=full[i][c]; }
+      if (puzzle.every(row=>row[i]===0)) { const rr=(Math.random()*9)|0; puzzle[rr][i]=full[rr][i]; }
+    }
+  }
+  return puzzle;
+}
+
+self.onmessage = function({data}) {
+  const {level} = data;
+  const full = generateFullSolution();
+  const openMap = {easy:Math.round(81*0.7), medium:Math.round(81*0.5), hard:Math.round(81*0.3)};
+  const open = openMap[level]??Math.round(81*0.5);
+  const puzzle = makePuzzle(full, open, level==='easy');
+  self.postMessage({full, puzzle});
+};
+`;
+
+const blob = new Blob([WORKER_CODE], {type:'application/javascript'});
+const worker = new Worker(URL.createObjectURL(blob));
+
+/* ── Стан гри ────────────────────────────────────────────── */
+const state = {
+  board:          Array.from({length:9}, () => new Int8Array(9)),
+  puzzle:         null,
+  solution:       null,
+  level:          'easy',
+  showingSolution:false,
+  selectedNumber: null,
+  pendingLevel:   null,   // рівень, що чекає підтвердження
+};
+
+/* ── DOM-посилання ───────────────────────────────────────── */
+const dom = {
+  table:   document.getElementById('sudoku-grid'),
+  cells:   [],
+  inputs:  [],
+  modal:   document.getElementById('modal'),
+  btnSolution: document.getElementById('btn-show-solution'),
+  levelBtns: {
+    easy:   document.getElementById('btn-easy'),
+    medium: document.getElementById('btn-medium'),
+    hard:   document.getElementById('btn-hard'),
+  },
+};
+
+/* ── Побудова сітки ──────────────────────────────────────── */
+(function createGrid() {
+  const frag = document.createDocumentFragment();
+  for (let r=0;r<9;r++) {
+    const tr = document.createElement('tr');
+    for (let c=0;c<9;c++) {
+      const td = document.createElement('td');
+      const inp = document.createElement('input');
+      inp.type='text'; inp.inputMode='none'; inp.maxLength=1;
+      inp.dataset.r=r; inp.dataset.c=c;
+      td.appendChild(inp); tr.appendChild(td);
+    }
+    frag.appendChild(tr);
+  }
+  dom.table.innerHTML='';
+  dom.table.appendChild(frag);
+  dom.cells  = Array.from(dom.table.querySelectorAll('td'));
+  dom.inputs = Array.from(dom.table.querySelectorAll('input'));
+
+  /* Fallback для браузерів без container queries:
+     рахуємо розмір шрифту відносно реального px-розміру клітинки */
+  function syncFontSize() {
+    const cellPx = dom.table.offsetWidth / 9;
+    if (!cellPx) return;
+    const fs = Math.round(cellPx * 0.55) + 'px';
+    dom.inputs.forEach(inp => inp.style.fontSize = fs);
+  }
+  new ResizeObserver(syncFontSize).observe(dom.table);
+  syncFontSize();
+})();
+
+/* ── Перевірка: чи гравець щось вводив ──────────────────── */
+function playerHasInput() {
+  if (!state.puzzle) return false;
+  for (let r=0;r<9;r++)
+    for (let c=0;c<9;c++)
+      if (state.puzzle[r][c]===0 && state.board[r][c]!==0) return true;
+  return false;
+}
+
+/* ── Запит нової гри (з перевіркою) ─────────────────────── */
+function requestNewGame(level) {
+  if (playerHasInput() && !state.showingSolution) {
+    state.pendingLevel = level;
+    dom.modal.classList.add('open');
+  } else {
+    startGame(level);
   }
 }
 
-/* Validator / Generator / NumberPanel (без змін по логіці) */
-class SudokuValidator {
-  constructor(game) { this.game = game; }
-  checkErrors() {
-    const SIZE = this.game.SIZE;
-    const b = this.getBoardState();
-    const e = new Set();
-    for (let r = 0; r < SIZE; r++) {
-      const s = new Map();
-      for (let c = 0; c < SIZE; c++) {
-        const v = b[r][c];
-        if (!v) continue;
-        if (s.has(v)) { e.add(`${r},${c}`); e.add(`${r},${s.get(v)}`); }
-        else s.set(v, c);
-      }
-    }
-    for (let c = 0; c < SIZE; c++) {
-      const s = new Map();
-      for (let r = 0; r < SIZE; r++) {
-        const v = b[r][c];
-        if (!v) continue;
-        if (s.has(v)) { e.add(`${r},${c}`); e.add(`${s.get(v)},${c}`); }
-        else s.set(v, r);
-      }
-    }
-    for (let br = 0; br < 3; br++) {
-      for (let bc = 0; bc < 3; bc++) {
-        const s = new Map();
-        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
-          const r = br*3+i, c = bc*3+j, v = b[r][c];
-          if (!v) continue;
-          if (s.has(v)) { e.add(`${r},${c}`); const [rr,cc] = s.get(v); e.add(`${rr},${cc}`); }
-          else s.set(v, [r,c]);
-        }
-      }
-    }
-    this.game.dom.cells.forEach((cell, idx) => {
-      const r = Math.floor(idx / SIZE), c = idx % SIZE;
-      cell.classList.toggle('error', e.has(`${r},${c}`));
-    });
-  }
-  getBoardState() {
-    const SIZE = this.game.SIZE;
-    const b = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
-    this.game.dom.inputs.forEach((inp, i) => {
-      const v = parseInt(inp.value) || 0;
-      b[Math.floor(i / SIZE)][i % SIZE] = v;
-    });
-    return b;
+/* ── Запуск гри ──────────────────────────────────────────── */
+function startGame(level) {
+  state.level = level;
+  state.showingSolution = false;
+  dom.btnSolution.textContent = "РОЗВ'ЯЗОК";
+  document.body.classList.remove('won');
+  /* Підсвічуємо активний рівень */
+  Object.entries(dom.levelBtns).forEach(([k,btn]) => btn.classList.toggle('active-level', k===level));
+  worker.postMessage({level});
+}
+
+worker.onmessage = function({data:{full,puzzle}}) {
+  state.solution = full;
+  state.puzzle   = puzzle;
+  displayPuzzle(puzzle);
+};
+
+/* ── Відображення головоломки ────────────────────────────── */
+function displayPuzzle(puzzle) {
+  const {cells, inputs} = dom;
+  for (let i=0;i<81;i++) {
+    const r=(i/9)|0, c=i%9, v=puzzle[r][c];
+    const inp=inputs[i], cell=cells[i];
+    state.board[r][c] = v;
+    inp.value = v||'';
+    inp.disabled = v!==0;
+    cell.classList.toggle('prefilled', v!==0);
+    cell.classList.remove('error');
   }
 }
 
-class PuzzleGenerator {
-  constructor(game) { this.game = game; }
-  generateFullSolution() {
-    const SIZE = this.game.SIZE;
-    const b = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
-    const nums = () => [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
-    const isSafe = (b, r, c, n) => {
-      for (let i=0;i<SIZE;i++) if (b[r][i]===n || b[i][c]===n) return false;
-      const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
-      for (let i=0;i<3;i++) for (let j=0;j<3;j++) if (b[br+i][bc+j]===n) return false;
-      return true;
-    };
-    const back = (p=0) => {
-      if (p === SIZE*SIZE) return true;
-      const r = Math.floor(p/SIZE), c = p%SIZE;
-      for (const n of nums()) {
-        if (isSafe(b,r,c,n)) {
-          b[r][c] = n;
-          if (back(p+1)) return true;
-          b[r][c] = 0;
-        }
-      }
-      return false;
-    };
-    back();
-    return b;
-  }
-
-  countSolutions(board, limit=2) {
-    let solutions = 0;
-    const SIZE = this.game.SIZE;
-    const isSafe = (b,r,c,n) => {
-      for (let i=0;i<SIZE;i++) if(b[r][i]===n||b[i][c]===n) return false;
-      const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
-      for (let i=0;i<3;i++) for (let j=0;j<3;j++) if (b[br+i][bc+j]===n) return false;
-      return true;
-    };
-    function findEmpty(b){ for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (b[r][c]===0) return [r,c]; return null; }
-    function back(b) {
-      if (solutions>=limit) return;
-      const pos = findEmpty(b); if (!pos) { solutions++; return; }
-      const [r,c] = pos;
-      for (let n=1;n<=9;n++) { if (isSafe(b,r,c,n)) { b[r][c]=n; back(b); b[r][c]=0; if (solutions>=limit) return; } }
+/* ── Валідація ───────────────────────────────────────────── */
+function checkErrors() {
+  const b = state.board;
+  const err = new Set();
+  for (let r=0;r<9;r++) {
+    const seen=new Map();
+    for (let c=0;c<9;c++) {
+      const v=b[r][c]; if (!v) continue;
+      if (seen.has(v)) { err.add(r*9+c); err.add(r*9+seen.get(v)); } else seen.set(v,c);
     }
-    const copy = board.map(r=>r.slice()); back(copy); return solutions;
   }
-
-  getOpenCount(level) {
-    const total = this.game.SIZE * this.game.SIZE;
-    if(level==='easy') return Math.round(total * 0.7);
-    if(level==='medium') return Math.round(total * 0.5);
-    if(level==='hard') return Math.round(total * 0.3);
-    return Math.round(total * 0.5);
+  for (let c=0;c<9;c++) {
+    const seen=new Map();
+    for (let r=0;r<9;r++) {
+      const v=b[r][c]; if (!v) continue;
+      if (seen.has(v)) { err.add(r*9+c); err.add(seen.get(v)*9+c); } else seen.set(v,r);
+    }
   }
+  for (let br=0;br<3;br++) for (let bc=0;bc<3;bc++) {
+    const seen=new Map();
+    for (let i=0;i<3;i++) for (let j=0;j<3;j++) {
+      const r=br*3+i, c=bc*3+j, v=b[r][c]; if (!v) continue;
+      const key=r*9+c;
+      if (seen.has(v)) { err.add(key); err.add(seen.get(v)); } else seen.set(v,key);
+    }
+  }
+  dom.cells.forEach((cell,i) => cell.classList.toggle('error', err.has(i)));
+  checkWin(err);
+}
 
-  makePuzzleFromSolution(full, openCount, ensureRowCol=false) {
-    const SIZE = this.game.SIZE;
-    const puzzle = full.map(r => r.slice());
-    const allCells = [];
-    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) allCells.push([r,c]);
-    allCells.sort(()=>Math.random()-0.5);
-    let removed = 0;
-    const maxRemovals = SIZE*SIZE - openCount;
-    for (const [r,c] of allCells) {
-      if (removed>=maxRemovals) break;
-      const backup = puzzle[r][c]; puzzle[r][c] = 0;
-      if (this.countSolutions(puzzle,2) === 1) { removed++; } else puzzle[r][c] = backup;
-    }
-    if (ensureRowCol) {
-      for (let i=0;i<SIZE;i++) {
-        if (puzzle[i].every(v=>v===0)) {
-          const c = Math.floor(Math.random()*SIZE); puzzle[i][c] = full[i][c];
-        }
-        const colEmpty = puzzle.every(r=>r[i]===0);
-        if (colEmpty) {
-          const r = Math.floor(Math.random()*SIZE); puzzle[r][i] = full[r][i];
-        }
-      }
-    }
-    return puzzle;
+function checkWin(err) {
+  if (err.size > 0) return;
+  /* Всі клітинки заповнені і помилок немає */
+  for (let i=0;i<81;i++) if (!state.board[(i/9)|0][i%9]) return;
+  document.body.classList.add('won');
+}
+
+/* ── Перемикання розв'язку ───────────────────────────────── */
+function toggleSolution() {
+  if (!state.solution) return;
+  if (!state.showingSolution) {
+    dom.inputs.forEach((inp,i) => {
+      inp.value = state.solution[(i/9)|0][i%9];
+      inp.disabled = true;
+      dom.cells[i].classList.remove('error');
+    });
+    state.showingSolution = true;
+    dom.btnSolution.textContent = 'СХОВАТИ';
+  } else {
+    displayPuzzle(state.puzzle);
+    state.showingSolution = false;
+    dom.btnSolution.textContent = "РОЗВ'ЯЗОК";
   }
 }
 
-class NumberPanel {
-  constructor(game) {
-    this.game = game;
-    this.buttons = new Map();
-    this.initialize();
+/* ── Введення числа ──────────────────────────────────────── */
+dom.table.addEventListener('click', e => {
+  const inp = e.target.closest('input');
+  if (!inp || state.showingSolution || inp.disabled) return;
+  const r=+inp.dataset.r, c=+inp.dataset.c;
+  if (state.selectedNumber === 'del') {
+    inp.value=''; state.board[r][c]=0;
+  } else if (state.selectedNumber) {
+    inp.value=state.selectedNumber; state.board[r][c]=+state.selectedNumber;
   }
-
-  initialize() {
-    const container = document.querySelector('.number-panel');
-    this.buttons = Array.from(container.querySelectorAll('button')).reduce((map, button) => {
-      map.set(button.dataset.num, button);
-      return map;
-    }, new Map());
-    this.buttons.forEach((button, number) => {
-      button.addEventListener('click', () => this.handleNumberClick(number));
-    });
-  }
-
-  handleNumberClick(number) {
-    const same = this.game.selectedNumber === number;
-    this.game.selectedNumber = same ? null : number;
-    this.updateActiveNumber();
-  }
-
-  updateActiveNumber() {
-    this.buttons.forEach((button, num) => {
-      button.classList.toggle('active', num === this.game.selectedNumber);
-    });
-  }
-}
-
-/* Запуск гри */
-document.addEventListener('DOMContentLoaded', () => {
-  new SudokuGame();
+  checkErrors();
 });
+dom.table.addEventListener('focusin', e => { if (e.target.tagName==='INPUT') e.target.blur(); });
+
+/* ── Панель чисел ────────────────────────────────────────── */
+const numButtons = new Map();
+document.querySelectorAll('.numbers-row button').forEach(btn => {
+  numButtons.set(btn.dataset.num, btn);
+  btn.addEventListener('click', () => {
+    const n = btn.dataset.num;
+    const same = state.selectedNumber === n;
+    state.selectedNumber = same ? null : n;
+    numButtons.forEach((b,k) => b.classList.toggle('active', k===state.selectedNumber));
+  });
+});
+
+/* ── Кнопки рівня ────────────────────────────────────────── */
+document.getElementById('btn-easy').onclick   = () => requestNewGame('easy');
+document.getElementById('btn-medium').onclick = () => requestNewGame('medium');
+document.getElementById('btn-hard').onclick   = () => requestNewGame('hard');
+dom.btnSolution.onclick = toggleSolution;
+
+/* ── Модальне вікно ──────────────────────────────────────── */
+document.getElementById('modal-cancel').onclick  = () => dom.modal.classList.remove('open');
+document.getElementById('modal-confirm').onclick = () => {
+  dom.modal.classList.remove('open');
+  if (state.pendingLevel) { startGame(state.pendingLevel); state.pendingLevel=null; }
+};
+
+/* ── Старт ───────────────────────────────────────────────── */
+startGame('easy');
 </script>
 </body>
 </html>
